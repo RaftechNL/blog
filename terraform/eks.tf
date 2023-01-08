@@ -20,7 +20,7 @@ locals {
   azs = slice(data.aws_availability_zones.available.names, 0, 3)
 
   tags = {
-    Cluster    = local.name
+    Cluster = local.name
   }
 }
 
@@ -97,8 +97,18 @@ module "eks" {
     }
   }
 
+  node_security_group_tags = {
+    "karpenter.sh/discovery/raf-prod" = "raf-prod"
+  }
+
+# Self managed node groups will not automatically create the aws-auth configmap so we need to
   create_aws_auth_configmap = true
   manage_aws_auth_configmap = true
+
+  aws_auth_node_iam_role_arns_non_windows = [
+    module.external_self_managed_node_group.iam_role_arn,
+    module.internal_self_managed_node_group.iam_role_arn,
+  ]
 
   aws_auth_roles = []
 
@@ -139,7 +149,7 @@ module "karpenter" {
 
 provider "aws" {
   region = "us-east-1"
-  alias = "use1"
+  alias  = "use1"
 }
 
 data "aws_ecrpublic_authorization_token" "token" {
@@ -163,6 +173,12 @@ provider "helm" {
 resource "helm_release" "karpenter" {
   namespace        = "karpenter"
   create_namespace = true
+
+  lifecycle {
+    ignore_changes = [
+      repository_password,
+    ]
+  }
 
   name                = "karpenter"
   repository          = "oci://public.ecr.aws/karpenter"
